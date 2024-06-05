@@ -18,8 +18,9 @@ import qualified Graphics.Vty.CrossPlatform as VC
 import Data.Maybe (isNothing, fromJust)
 import Brick.Widgets.Center (hCenter, centerLayer)
 import qualified Brick.Widgets.Edit as BE
-import Brick.Widgets.List (renderList, listMoveBy, listSelectedElement, listFindBy)
+import Brick.Widgets.List hiding (reverse)
 import Brick.Widgets.Edit (handleEditorEvent)
+import qualified Data.Vector as Vec
 
 import Types
 import Utils
@@ -40,6 +41,9 @@ main = do
     initialVty <- buildVty
     config <- loadConfig
     let apiCfg = lookupApi args.cmdApi $ config^.cfgApis
+        modelInfo m = (m^.cfgApiId, m^.cfgApiModel)
+        modelList = listMoveToElement (modelInfo apiCfg) $
+          list ModelList (Vec.fromList $ modelInfo <$> config^.cfgApis) 1
     complete <- chatCompletion apiCfg
     let st = St
           NormalMode Nothing ""
@@ -48,6 +52,7 @@ main = do
           (floatEditor "")
           (pathEditor "")
           (fileList [])
+          modelList
           []
           chan
           complete
@@ -185,6 +190,7 @@ topLayerUI st = withBorderStyle unicodeRounded $ case st^.stMode of
   SavePickerMode  -> pickerMenuUI st
   SelChatEditMode -> floatEditUI st
   SysPromptMode   -> floatEditUI st
+  ModelSelectMode -> modelSelectUI st
   _               -> emptyWidget
 
 keyMenu :: [(Text, Text)] -> Widget n
@@ -198,6 +204,7 @@ spcMenuUI _ = dialog "menu" menu where
       ("p", "edit system prompt"),
       ("l", "load chat session"),
       ("s", "save chat session"),
+      ("m", "select model and API provider"),
       ("n", "start a new chat session")
     ]
 
@@ -229,10 +236,10 @@ dialog title = centerLayer . borderWithLabel (txt title)
 pickerMenuUI :: St -> Widget Name
 pickerMenuUI st = centerLayer $ hLimit 100 $ vLimit 25 $ picker <+> chat where
   picker = borderWithLabel title menu
-  menu = hLimit 30 $ vBox [edit, str (replicate 100 '─'), list]
+  menu = hLimit 30 $ vBox [edit, str (replicate 100 '─'), li]
   edit = BE.renderEditor (str . unlines) True (st^.stPathEditor)
-  list = withVScrollBars OnRight $
-           renderList rl True (st^.stFileList)
+  li = withVScrollBars OnRight $
+        renderList rl True (st^.stFileList)
   rl True e = withAttr selectAttr $ padRight Max $ str e
   rl _    e = str e
   chat = borderWithLabel (txt "preview") $ padRight Max $ padBottom Max $
@@ -241,6 +248,15 @@ pickerMenuUI st = centerLayer $ hLimit 100 $ vLimit 25 $ picker <+> chat where
     LoadPickerMode -> "load picker"
     SavePickerMode -> "save picker"
     _              -> "picker"
+
+modelSelectUI :: St -> Widget Name
+modelSelectUI st = centerLayer $ hLimit 60 $ vLimit 20 picker where
+  picker = borderWithLabel (str "select model provider") menu
+  menu = withVScrollBars OnRight $
+    renderList rl True (st^.stModelList)
+  rl True e = withDefAttr selectAttr $ padRight Max $ f e
+  rl _    e = f e
+  f (p, m) = str m <+> str " - " <+> str p
 
 nonEmpty :: String -> String -> String
 nonEmpty a "" = a
@@ -293,6 +309,7 @@ handleEvent e@VtyEvent{} = do
     HelpMenuMode -> handleHelpMenu e
     LoadPickerMode -> handleFilePicker e
     SavePickerMode -> handleFilePicker e
+    ModelSelectMode -> handleModelSelector e
     SysPromptMode -> handleFloatEditor editSystemPrompt e
     SelChatEditMode -> handleFloatEditor editSelectChat e
 
@@ -308,11 +325,12 @@ handleEvent (AppEvent delta) = do
           ChatMessage AssistantRole (c <> deltaMsg) : xs
         xs -> ChatMessage AssistantRole deltaMsg : xs
   stChats .= reverse chats'
-  vScrollToEnd $ viewportScroll ChatList
   case delta of
-    StreamDelta _ -> return ()
+    StreamDelta _ -> scrollChatListEnd
     StreamUsage u -> stStatusInfo .= showUsage u
-    StreamError e -> stStatusInfo .= e
+    StreamError e -> do
+      stStatusInfo .= e
+      stStream .= Nothing
     _ -> stStream .= Nothing -- reset stream handler
 
 handleEvent (MouseDown ChatList b [] _) = case b of
@@ -428,6 +446,7 @@ handleSpcMenu (VtyEvent (EvKey k [])) = case k of
   KChar 'p' -> doEditSystemPrompt
   KChar 'l' -> doFilePicker LoadPickerMode
   KChar 's' -> doFilePicker SavePickerMode
+  KChar 'm' -> unlessStream $ changeMode ModelSelectMode
   _ -> return ()
 handleSpcMenu _ = return ()
 
@@ -451,6 +470,24 @@ handleFilePicker (VtyEvent (EvKey k [V.MCtrl])) = case k of
   KChar 'u' -> vScrollHalf PreviewList (-1)
   _         -> return ()
 handleFilePicker _ = return ()
+
+handleModelSelector :: BrickEvent Name e -> EventM Name St ()
+handleModelSelector (VtyEvent (EvKey k [])) = case k of
+  KEsc      -> changeMode NormalMode
+  KChar 'k' -> stModelList %= listMoveBy (-1)
+  KChar 'j' -> stModelList %= listMoveBy 1
+  KUp       -> stModelList %= listMoveBy (-1)
+  KDown     -> stModelList %= listMoveBy 1
+  KEnter    -> unlessStream $
+    whenJustM(uses stModelList listSelectedElement) $ \(_, (p, _)) -> do
+      cfg <- use stConfig
+      let apiCfg = lookupApi (Just p) $ cfg^.cfgApis
+      complete <- liftIO $ chatCompletion apiCfg
+      stApiConfig .= apiCfg
+      stChatComplete .= complete
+      changeMode NormalMode
+  _         -> return ()
+handleModelSelector _ = return ()
 
 handleFloatEditor :: (Maybe Text -> EventM Name St ())
   -> BrickEvent Name e -> EventM Name St ()
@@ -498,7 +535,7 @@ postUserMessage = unlessStream $ do
     doChatComplete
 
 rerollLastChat :: EventM Name St ()
-rerollLastChat = unlessStream $
+rerollLastChat = unlessStream $ do
   use stChats >>= completeChat
 
 completeChat :: [ChatMessage] -> EventM Name St ()
@@ -579,6 +616,12 @@ vScrollHalf n d = do
       dl = d * max 1 (h `div` 2)
   vScrollBy (viewportScroll n) dl
 
+scrollChatListEnd :: EventM Name s ()
+scrollChatListEnd = do
+  whenJustM (lookupViewport ChatList) $ \vp ->
+    when (vp^.vpTop + vp ^. vpSize . _2 >= vp^.vpContentSize . _2) $
+      vScrollToEnd $ viewportScroll ChatList
+
 doChatComplete :: EventM Name St ()
 doChatComplete = unlessStream $ do
   complete <- use stChatComplete
@@ -586,12 +629,12 @@ doChatComplete = unlessStream $ do
   msgs <- uses stChats makeMessages
   cancel <- liftIO $ complete msgs $ writeBChan chan
   stStream .= Just cancel
+  scrollChatListEnd
 
 doCancelStream :: EventM Name St ()
 doCancelStream = do
   s <- use stStream
   liftIO $ maybe (return ()) cancelStream s
-  stStream .= Nothing
 
 doNewChat :: EventM Name St ()
 doNewChat = unlessStream $ do

@@ -9,7 +9,7 @@ import WEditor.LineWrap
 import WEditorBrick.WrappingEditor
 import Completion
 import Brick.Widgets.Edit (Editor, editor)
-import Brick.Widgets.List (list, GenericList)
+import Brick.Widgets.List (list, List)
 import qualified Data.Vector as Vec
 import AppConfig
 
@@ -19,6 +19,7 @@ data Name = MainView
           | FloatEditor
           | ChatList
           | FileList
+          | ModelList
           | PreviewList
           | SpcMenu
           deriving (Eq, Ord, Show)
@@ -33,6 +34,7 @@ data Mode = NormalMode
           | LoadPickerMode
           | SysPromptMode
           | SelChatEditMode
+          | ModelSelectMode
           deriving (Eq, Ord, Show)
 
 data ChatRole = SystemRole
@@ -56,7 +58,8 @@ data St = St {
   _stUserEditor :: WrappingEditor Name,
   _stFloatEditor :: WrappingEditor Name,
   _stPathEditor :: Editor FilePath Name,
-  _stFileList :: GenericList Name Vec.Vector FilePath ,
+  _stFileList :: List Name FilePath,
+  _stModelList :: List Name (String, String),
   _stSessionFiles :: [FilePath],
   _stEventChan :: BChan StreamData,
   _stChatComplete :: [Message] -> (StreamData -> IO ()) -> IO StreamHandle,
@@ -74,5 +77,5 @@ floatEditor = newEditor breakExact FloatEditor
 pathEditor :: FilePath -> Editor FilePath Name
 pathEditor = editor PathEditor (Just 1)
 
-fileList :: [FilePath] -> GenericList Name Vec.Vector FilePath
+fileList :: [FilePath] -> List Name FilePath
 fileList v = list FileList (Vec.fromList v) 1

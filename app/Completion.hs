@@ -14,16 +14,15 @@ import GHC.Generics (Generic)
 import Data.Aeson
 import Data.Aeson.Lens
 import Data.List (singleton)
-import qualified Data.ByteString.Lazy as BL
+import qualified Data.ByteString as BS
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Text.Encoding (encodeUtf8)
 import Network.HTTP.Client
 import Network.HTTP.Client.TLS (tlsManagerSettings)
 import Network.HTTP.Types (hAuthorization, hContentType)
-import Data.Maybe (fromMaybe, isNothing)
+import Data.Maybe (fromMaybe)
 import Control.Concurrent
-import Control.Monad (when)
 import Control.Lens hiding (Choice, (.=), use)
 import AppConfig
 
@@ -93,26 +92,28 @@ chatCompletion cfg = do
     cancel <- newEmptyMVar
     _ <- forkIO $ withResponse request manager $ \response -> do
       let loop = do
-            chunk <- brReadSome (responseBody response) 1024
-            if BL.null chunk
+            chunk <- brRead (responseBody response)
+            if BS.null chunk
               then proc StreamComplete
               else do
-                let chks = filter (not . BL.null) $ BL.split 0xa chunk
+                let chks = filter (not . BS.null) $ BS.split 0xa chunk
                 mapM_ proc $ concatMap processChunk chks
                 r <- tryTakeMVar cancel
-                when (isNothing r)
-                  loop
+                case r of
+                  Just _  -> proc StreamComplete
+                  Nothing -> loop
       loop
     return $ StreamHandle cancel
 
 cancelStream :: StreamHandle -> IO ()
 cancelStream (StreamHandle h) = putMVar h ()
 
-processChunk :: BL.ByteString -> [StreamData]
+processChunk :: BS.ByteString -> [StreamData]
+processChunk "data: [DONE]" = []
 processChunk chunk = do
-  let bytes = fromMaybe chunk $ BL.stripPrefix "data: " chunk
+  let bytes = fromMaybe chunk $ BS.stripPrefix "data: " chunk
       f d = StreamDelta <$> d ^? key "content" . _String
-  case eitherDecode bytes of
+  case eitherDecodeStrict bytes of
     Left err -> [StreamError $ "Error decoding JSON: " <> err]
     Right (CompletionResponse chs use) ->
       (fromMaybe (StreamDelta "") . f . delta <$> chs)
