@@ -1,0 +1,29 @@
+# the list of LLM API providers for text completion.
+provider:
+# The first provider will be used by default, while the others
+# can be activated via `lmchat --api`.
+- id: llama.cpp
+  base-url: http://localhost:8080/v1 # the Base-URL for local OpenAI compatible API.
+  key: sk-no-key-required
+  model: qwen1.5-32b-chat # your local model name
+  # here are more optional parameters that will be included when post request.
+  params:
+    temperature: 0.8
+    presence_penalty: 1.1
+- id: openai
+  base-url: https://api.openai.com/v1
+  key: sk-xxxx
+  model: gpt-4o
+- id: qwen
+  base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
+  key: sk-xxxx
+  model: qwen1.5-110b-chat
+
+# the commands that need to be invoked for more useful features.
+commands:
+  editor: vim -c 'set nonumber | nnoremap q :q<CR>'
+  yank: clipcopy
+  paste: clippaste
+  # refer to https://github.com/daipeihust/im-select
+  # ime-enable: fcitx5-remote -o
+  # ime-disable: fcitx5-remote -c

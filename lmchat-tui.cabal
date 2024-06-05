@@ -1,0 +1,183 @@
+cabal-version: 2.2
+
+-- This file has been generated from package.yaml by hpack version 0.36.0.
+--
+-- see: https://github.com/sol/hpack
+
+name:           lmchat-tui
+version:        0.1.0.0
+description:    Please see the README on GitHub at <https://github.com/githubuser/lmchat-tui#readme>
+homepage:       https://github.com/githubuser/lmchat-tui#readme
+bug-reports:    https://github.com/githubuser/lmchat-tui/issues
+author:         Author name here
+maintainer:     example@example.com
+copyright:      2024 Author name here
+license:        BSD-3-Clause
+license-file:   LICENSE
+build-type:     Simple
+extra-source-files:
+    README.md
+    CHANGELOG.md
+
+source-repository head
+  type: git
+  location: https://github.com/githubuser/lmchat-tui
+
+library
+  exposed-modules:
+      WEditor.Base
+      WEditor.Base.Char
+      WEditor.Base.Editor
+      WEditor.Base.Line
+      WEditor.Base.Para
+      WEditor.Base.Parser
+      WEditor.Base.Viewer
+      WEditor.Document
+      WEditor.Internal.Line
+      WEditor.Internal.Para
+      WEditor.LineWrap
+      WEditorBrick.WrappingEditor
+  other-modules:
+      Paths_lmchat_tui
+  autogen-modules:
+      Paths_lmchat_tui
+  hs-source-dirs:
+      src
+  default-extensions:
+      FlexibleInstances
+      FlexibleContexts
+      UndecidableInstances
+      OverloadedRecordDot
+      DuplicateRecordFields
+      ScopedTypeVariables
+      TupleSections
+      DeriveGeneric
+      QuasiQuotes
+      DeriveDataTypeable
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints
+  build-depends:
+      Glob
+    , aeson
+    , base >=4.7 && <5
+    , brick
+    , bytestring
+    , containers
+    , extra
+    , filepath
+    , http-client
+    , http-client-tls
+    , http-types
+    , insc
+    , lens
+    , lens-aeson
+    , mtl
+    , network
+    , process
+    , temporary
+    , text
+    , vector
+    , vty
+    , vty-crossplatform
+  default-language: Haskell2010
+
+executable lmchat
+  main-is: Main.hs
+  other-modules:
+      AppConfig
+      CmdArgs
+      Completion
+      Types
+      Utils
+      Paths_lmchat_tui
+  autogen-modules:
+      Paths_lmchat_tui
+  hs-source-dirs:
+      app
+  default-extensions:
+      FlexibleInstances
+      FlexibleContexts
+      UndecidableInstances
+      OverloadedRecordDot
+      DuplicateRecordFields
+      ScopedTypeVariables
+      TupleSections
+      DeriveGeneric
+      QuasiQuotes
+      DeriveDataTypeable
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      Glob
+    , aeson
+    , base >=4.7 && <5
+    , brick
+    , bytestring
+    , cmdargs
+    , containers
+    , directory
+    , extra
+    , filepath
+    , http-client
+    , http-client-tls
+    , http-types
+    , insc
+    , lens
+    , lens-aeson
+    , lmchat-tui
+    , mtl
+    , natural-sort
+    , network
+    , process
+    , temporary
+    , text
+    , vector
+    , vty
+    , vty-crossplatform
+    , yaml
+  default-language: Haskell2010
+
+test-suite lmchat-tui-test
+  type: exitcode-stdio-1.0
+  main-is: Spec.hs
+  other-modules:
+      Paths_lmchat_tui
+  autogen-modules:
+      Paths_lmchat_tui
+  hs-source-dirs:
+      test
+  default-extensions:
+      FlexibleInstances
+      FlexibleContexts
+      UndecidableInstances
+      OverloadedRecordDot
+      DuplicateRecordFields
+      ScopedTypeVariables
+      TupleSections
+      DeriveGeneric
+      QuasiQuotes
+      DeriveDataTypeable
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      Glob
+    , aeson
+    , base >=4.7 && <5
+    , brick
+    , bytestring
+    , containers
+    , extra
+    , filepath
+    , http-client
+    , http-client-tls
+    , http-types
+    , insc
+    , lens
+    , lens-aeson
+    , lmchat-tui
+    , mtl
+    , network
+    , process
+    , temporary
+    , text
+    , vector
+    , vty
+    , vty-crossplatform
+  default-language: Haskell2010
