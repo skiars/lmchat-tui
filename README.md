@@ -1,5 +1,9 @@
 # lmchat-tui
 
+## Demo
+
+[demo.mp4](https://github.com/skiars/lmchat-tui/assets/16442186/6f2a196c-5d4f-4aab-acde-4481c5f1d2aa)
+
 ## Install
 
 ### Via stack
