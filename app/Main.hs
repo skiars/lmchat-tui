@@ -38,7 +38,7 @@ main = do
         ("xterm-256color", "/home/gwl/.vty/width_table_screen-256color.dat"),
         ("screen-256color", "/home/gwl/.vty/width_table_screen-256color.dat")
       ]}
-    initialVty <- buildVty
+    vty <- buildVty
     config <- loadConfig
     let apiCfg = lookupApi args.cmdApi $ config^.cfgApis
         modelInfo m = (m^.cfgApiId, m^.cfgApiModel)
@@ -58,7 +58,8 @@ main = do
           complete
           apiCfg
           config
-    void $ customMain initialVty buildVty (Just chan) app st
+    void $ customMain vty buildVty (Just chan) app st
+    buildVty >>= disableMouse
 
 lookupApi :: Maybe String -> [ConfigApi] -> ConfigApi
 lookupApi Nothing  s = head s
@@ -69,7 +70,7 @@ app = App
     { appDraw = drawUI
     , appChooseCursor = showFirstCursor
     , appHandleEvent = handleEvent
-    , appStartEvent = startEvent
+    , appStartEvent = enableMouse
     , appAttrMap = theAttrMap
     }
 
@@ -223,6 +224,7 @@ helpMenuUI _ = dialog "key binds" menu where
       ("r",       "regenerate the last message"),
       ("R",       "re-edit the last user message"),
       ("<enter>", "send current user message"),
+      ("<c-e>",   "edit user message by external editor"),
       ("<c-c>",   "interrupt generation"),
       ("s",       "enter dialogue selection mode"),
       ("p",       "paste text into user message"),
@@ -290,12 +292,18 @@ modeName st = case st^.stMode of
   SelChatEditMode -> "SELECT"
   _               -> "NORMAL"
 
-startEvent :: EventM n s ()
-startEvent = do
+enableMouse :: EventM n s ()
+enableMouse = do
   vty <- getVtyHandle
   let output = V.outputIface vty
   when (V.supportsMode output V.Mouse) $
     liftIO $ V.setMode output V.Mouse True
+
+disableMouse :: V.Vty -> IO ()
+disableMouse vty = do
+  let output = V.outputIface vty
+  when (V.supportsMode output V.Mouse) $
+    V.setMode output V.Mouse False
 
 handleEvent :: BrickEvent Name StreamData -> EventM Name St ()
 handleEvent e@VtyEvent{} = do
@@ -375,6 +383,7 @@ handleNormal (VtyEvent (EvKey k [])) = case k of
 handleNormal (VtyEvent (EvKey k [V.MCtrl])) = case k of
   KChar 'd' -> vScrollHalf ChatList 1
   KChar 'u' -> vScrollHalf ChatList (-1)
+  KChar 'e' -> doUserEditExt
   KChar 'c' -> doCancelStream
   _         -> return ()
 handleNormal _ = return ()
@@ -387,6 +396,7 @@ handleSEdit (VtyEvent key@(EvKey k [])) = case k of
 handleSEdit (VtyEvent (EvKey k [V.MCtrl])) = case k of
   KChar 'o' -> changeMode MEditMode
   KChar 'c' -> doCancelStream
+  KChar 'e' -> doUserEditExt
   _         -> return ()
 handleSEdit _ = return ()
 
@@ -396,6 +406,7 @@ handleMEdit (VtyEvent key@(EvKey k [])) = case k of
   _    -> zoom stUserEditor $ handleEditor key
 handleMEdit (VtyEvent (EvKey k [V.MCtrl])) = case k of
   KChar 'o' -> changeMode SEditMode
+  KChar 'e' -> doUserEditExt
   KChar 'c' -> doCancelStream
   _         -> return ()
 handleMEdit _ = return ()
@@ -622,6 +633,14 @@ scrollChatListEnd = do
     when (vp^.vpTop + vp ^. vpSize . _2 >= vp^.vpContentSize . _2) $
       vScrollToEnd $ viewportScroll ChatList
 
+doUserEditExt :: EventM Name St ()
+doUserEditExt = do
+  txts <- uses stUserEditor $ Text.strip . (Text.unlines <$> dumpEditor)
+  cfg <- use stConfig
+  txts' <- suspendExt $ editTextExt cfg txts
+  when (txts' /= txts) $
+    stUserEditor .= userEditor txts'
+
 doChatComplete :: EventM Name St ()
 doChatComplete = unlessStream $ do
   complete <- use stChatComplete
@@ -701,4 +720,4 @@ updatePreview = do
     Nothing -> stPreviewChat .= []
 
 suspendExt :: Ord n => IO a -> EventM n s a
-suspendExt m = suspendAndResume' m <* startEvent
+suspendExt m = suspendAndResume' m <* enableMouse
