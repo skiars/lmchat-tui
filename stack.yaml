@@ -6,3 +6,5 @@ packages:
 extra-deps:
 - git: https://github.com/skiars/insc.git
   commit: 738760891cb95fcdcc70750b7baf4fbceaeca70f
+- git: https://github.com/chhackett/vty-windows.git
+  commit: 8a5abb5257cb1f5467e107a05348722c628c951b

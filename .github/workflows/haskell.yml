@@ -1,0 +1,48 @@
+name: Haskell CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+    - uses: actions/checkout@v4
+    - uses: haskell-actions/setup@v2.7.3
+      with:
+        enable-stack: true
+        ghc-version: '9.6.5'
+        cabal-version: '3.10'
+        stack-version: '2.15'
+
+    - name: Cache dependencies on Unix-like OS
+      if: startsWith(runner.os, 'Linux') || startsWith(runner.os, 'macOS')
+      uses: actions/cache@v4
+      with:
+        path: ~/.stack
+        key: ${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('stack.yaml') }}-${{ matrix.cache-bust }}
+    - name: Cache dependencies on Windows
+      if: startsWith(runner.os, 'Windows')
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~\AppData\Roaming\stack
+          ~\AppData\Local\Programs\stack
+        key: ${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('stack.yaml') }}-${{ matrix.cache-bust }}
+
+    - name: Stack config
+      run: stack config set system-ghc --global true
+
+    - name: Build
+      run: stack build
