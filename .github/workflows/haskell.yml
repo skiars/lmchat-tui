@@ -13,7 +13,7 @@ jobs:
   build:
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ubuntu-20.04, windows-latest, macos-latest, macos-13]
 
     runs-on: ${{ matrix.os }}
 
@@ -39,10 +39,54 @@ jobs:
         path: |
           ~\AppData\Roaming\stack
           ~\AppData\Local\Programs\stack
+          C:\sr
         key: ${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('stack.yaml') }}-${{ matrix.cache-bust }}
 
-    - name: Stack config
-      run: stack config set system-ghc --global true
-
     - name: Build
-      run: stack build
+      run: |
+        stack config set system-ghc --global true
+        stack install --local-bin-path ./dist
+
+    - name: Compress package on Unix-like OS
+      if: startsWith(runner.os, 'Linux') || startsWith(runner.os, 'macOS')
+      run: |
+        tar -czvf \
+          $(echo lmchat-${{ runner.os }}-${{ runner.arch }} | tr '[:upper:]' '[:lower:]')-bin.tar.gz \
+          -C dist lmchat
+    - name: Compress package on Windows
+      if: startsWith(runner.os, 'Windows')
+      run: |
+        Compress-Archive -Path dist/lmchat.exe -DestinationPath "lmchat-windows-${{ runner.arch }}-bin.zip".toLower()
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: lmchat-bin-${{ runner.os }}-${{ runner.arch }}
+        path: |
+          lmchat-*.tar.gz
+          lmchat-*.zip
+
+  release:
+    permissions:
+      contents: write
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          pattern: lmchat-bin-*
+          path: dist
+          merge-multiple: true
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          repository: skiars/lmchat-tui
+          files: dist/*
+          draft: true
+          overwrite: true
